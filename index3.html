@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Algarve + Lizbona — interaktywna mapa atrakcji (Lagos, Lizbona, Aljezur)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root { --bg:#ffffff; --panel:#ffffff; --border:#e5e7eb; --text:#111827; --muted:#6b7280; --tag:#f3f4f6;}
+    *{ box-sizing:border-box }
+    html, body { height:100%; margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
+    #map { height:100vh; width:100%; }
+    .panel {
+      position: absolute; top: 12px; left: 12px; z-index: 1000;
+      background: var(--panel); border:1px solid var(--border); border-radius: 12px;
+      padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.08); max-width: 320px;
+    }
+    .panel h2 { margin: 0 0 6px; font-size: 16px; }
+    .panel .sub { color: var(--muted); margin: 0 0 8px; font-size: 12px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px 12px; }
+    .group { margin: 8px 0 4px; font-weight:600; font-size:12px; color:#374151; }
+    label { display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+    input[type="checkbox"]{ width:16px; height:16px; }
+    .btns { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+    button {
+      border:1px solid var(--border); background:#fff; border-radius:999px; padding:6px 10px; cursor:pointer;
+      font-size:12px;
+    }
+    button:hover { box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .credit {
+      position: absolute; bottom: 12px; left: 12px; z-index:1000;
+      background: var(--panel); border:1px solid var(--border); border-radius: 12px;
+      padding: 6px 8px; font-size: 12px; color: var(--muted);
+    }
+    .popup h3 { margin:0 0 6px; font-size:16px; }
+    .popup p { margin:6px 0; }
+    .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:var(--tag); margin-left:6px; }
+    .gps { font-size:12px; color:var(--muted); margin-top:6px }
+    .src a{ text-decoration:none }
+    @media (max-width:720px){
+      .panel{ max-width: calc(100vw - 24px); right: 12px; }
+      .grid{ grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside class="panel">
+    <h2>Filtry</h2>
+    <p class="sub">Wybierz miasta i kategorie atrakcji, a potem dopasuj widok.</p>
+
+    <div class="group">Miasta</div>
+    <div class="grid" id="city-filters">
+      <label><input type="checkbox" data-city="Lagos" checked> Lagos</label>
+      <label><input type="checkbox" data-city="Lizbona" checked> Lizbona</label>
+      <label><input type="checkbox" data-city="Aljezur" checked> Aljezur</label>
+    </div>
+
+    <div class="group" style="margin-top:10px">Kategorie</div>
+    <div class="grid" id="cat-filters">
+      <label><input type="checkbox" data-cat="beach" checked> Plaże</label>
+      <label><input type="checkbox" data-cat="adventure" checked> Woda & adrenalina</label>
+      <label><input type="checkbox" data-cat="culture" checked> Zwiedzanie & historia</label>
+      <label><input type="checkbox" data-cat="nightlife" checked> Nocne życie</label>
+    </div>
+
+    <div class="btns">
+      <button id="btn-all">Zaznacz wszystko</button>
+      <button id="btn-none">Odznacz wszystko</button>
+      <button id="btn-fit">Dopasuj widok</button>
+    </div>
+  </aside>
+
+  <div class="credit">Mapa: © OpenStreetMap, Leaflet • Autor: Twój zespół</div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    // === Inicjalizacja mapy ===
+    const map = L.map('map', { zoomControl: true }).setView([37.1, -8.67], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    L.control.scale({imperial:false}).addTo(map);
+
+    // === Słowniki nazw ===
+    const CAT_LABEL = { beach: "Plaża", adventure: "Woda & adrenalina", culture: "Zwiedzanie", nightlife: "Nocne życie" };
+
+    // === ZBIÓR PUNKTÓW: LAGOS + LIZBONA + ALJEZUR ===
+    const spots = [
+      /* ============== LAGOS ============== */
+      { city:"Lagos", name:"Ponta da Piedade (klifowy labirynt + latarnia)", lat:37.08062, lng:-8.66942, cat:"adventure",
+        desc:"Najsłynniejsze klify Algarve: łuki skalne, groty, punkty widokowe i kładki.",
+        links:[{label:"Info (przewodnik)",url:"https://www.lagosportugalguide.com/lagos-algarve/ponta-da-piedade-lagos.html"},{label:"Mapa",url:"https://mapcarta.com/W55432710"}],
+        why:"Efekt WOW + trasy piesze i start kajaków/łodzi w okolicy." },
+      { city:"Lagos", name:"Praia do Camilo", lat:37.08733, lng:-8.66843, cat:"beach",
+        desc:"Ikoniczna plaża ze stromymi schodami i turkusową wodą.",
+        links:[{label:"Opis (blog)",url:"https://www.zigzagonearth.com/praia-camilo-beach-lagos-portugal/"},{label:"Koordy",url:"https://mapcarta.com/33030320"}],
+        why:"Świetne zdjęcia, zejście „pali” w nogi – klimat przygody." },
+      { city:"Lagos", name:"Praia de Dona Ana", lat:37.091427, lng:-8.669362, cat:"beach",
+        desc:"Duża, osłonięta plaża między Pinhão i Camilo – złote klify, łatwy dostęp.",
+        links:[{label:"Info + GPS",url:"https://www.lagosportugalguide.com/lagos-algarve/Praia-Dona-Ana-lagos.html"}],
+        why:"Bezpieczna baza wypadowa dla większej grupy." },
+      { city:"Lagos", name:"Praia da Batata (start kajaków/SUP)", lat:37.0977806, lng:-8.6684444, cat:"adventure",
+        desc:"Plaża u ujścia Bensafrim – częsty punkt startu kajaków do grot.",
+        links:[{label:"Info",url:"https://www.lagosportugalguide.com/lagos-algarve/Praia-da-Batata-lagos.html"},{label:"Koordy",url:"https://visitalgarve.pt/en/equipamento/8725/praia-da-batata"}],
+        why:"Idealna, by całą ekipą wsiąść w kajaki/SUP." },
+      { city:"Lagos", name:"Meia Praia (sporty wodne)", lat:37.1106944, lng:-8.659675, cat:"adventure",
+        desc:"4-km łuk piasku – kitesurf, żagle, gry zespołowe na plaży.",
+        links:[{label:"Koordy",url:"https://euroveloportugal.com/en/poi/meia-praia-2"},{label:"Wiki",url:"https://en.wikipedia.org/wiki/Meia_Praia"}],
+        why:"Dużo przestrzeni = luz dla 8 osób." },
+      { city:"Lagos", name:"Praia do Porto de Mós (surf)", lat:37.085000, lng:-8.687778, cat:"adventure",
+        desc:"Szeroka plaża na zachód od centrum, popularna dla surfujących.",
+        links:[{label:"Opis/położenie",url:"https://www.beachrex.com/en/portugal/faro/lagos-beaches/praia-do-porto-de-mos"}],
+        why:"Lekcje surfingu dla całej grupy lub free-surf." },
+      { city:"Lagos", name:"Marina de Lagos — rejsy/groty/delfiny", lat:37.108619, lng:-8.673139, cat:"adventure",
+        desc:"Punkt zbiórki na rejsy do grot Ponta da Piedade i wyprawy na delfiny.",
+        links:[{label:"Punkt zbiórki",url:"https://www.theabroadguide.com/from-lagos-2-5-hour-guided-coastal-boat-tour-grotto-visit/"},{label:"Operator",url:"https://bluefleet.pt/en/lagos-portugal-tourist-information/"}],
+        why:"Łatwa logistyka dla 8 osób, rejs to „pewniak”." },
+      { city:"Lagos", name:"Forte da Ponta da Bandeira (XVII w.)", lat:37.099050, lng:-8.668270, cat:"culture",
+        desc:"Fort u wejścia do portu – widoki na ujście i Batatę.",
+        links:[{label:"Wiki",url:"https://en.wikipedia.org/wiki/Fort_of_Ponta_da_Bandeira"},{label:"VisitPortugal",url:"https://www.visitportugal.com/en/node/136430"}],
+        why:"Szybki wtręt historyczny + foto-spot." },
+      { city:"Lagos", name:"Parque Aventura Lagos (liny + paintball)", lat:37.1166859, lng:-8.6575933, cat:"adventure",
+        desc:"Trasy w koronach drzew i paintball – adrenalina przy Meia Praia.",
+        links:[{label:"Strona",url:"https://parqueaventura.net/lagos/"},{label:"Mapa",url:"https://mytripalgarve.com/place/parque-aventura-lagos/"}],
+        why:"Team-bonding i rywalizacja dla ekipy." },
+      { city:"Lagos", name:"Lagos Divers (centrum nurkowe)", lat:37.10646, lng:-8.67502, cat:"adventure",
+        desc:"Kursy i nurkowania w okolicy Lagos.",
+        links:[{label:"Info/kontakt",url:"https://www.zentacle.com/Shop.aspx?CountryId=196&StateId=185&CityId=1872&OrganizationId=16594"},{label:"Ulica/położenie",url:"https://mapcarta.com/W800176049"}],
+        why:"Intro-dive dla „głębszych” wrażeń." },
+      { city:"Lagos", name:"Rua 25 de Abril (bar-street / pub crawl)", lat:37.10181, lng:-8.67214, cat:"nightlife",
+        desc:"Główna ulica nocnego życia – bary, kluby, muzyka na żywo.",
+        links:[{label:"Przewodnik nocny",url:"https://www.hotels.com/go/portugal/best-nightlife-lagos"},{label:"Przykładowy bar",url:"https://www.bonvivantbarinlagos.com/"}],
+        why:"Bar-hopping po intensywnym dniu." },
+      { city:"Lagos", name:"Praia do Pinhão (mała „instagramowa” zatoczka)", lat:37.094419, lng:-8.668249, cat:"beach",
+        desc:"Dzika plaża ze schodkami i widokowym klifem – blisko Dona Ana.",
+        links:[{label:"Koordy + mapa",url:"https://www.playocean.net/en/portugal/lagos/beaches/praia-do-pinhao-beach"},{label:"Alternatywa",url:"https://euroveloportugal.com/en/poi/praia-do-pinhao-2"}],
+        why:"Szybki wypad na foto/chill." },
+
+      /* ============== LIZBONA ============== */
+      { city:"Lizbona", name:"Bairro Alto (dzielnica barów)", lat:38.712753, lng:-9.146295, cat:"nightlife",
+        desc:"Klubowo-barowe centrum nocnej Lizbony; puby, fado, rooftop-y.",
+        links:[{label:"Opis/koordy",url:"https://www.latlong.net/place/bairro-alto-lisbon-portugal-25126.html"}],
+        why:"Świetny start na wieczór dla 8-os. ekipy." },
+      { city:"Lizbona", name:"Pink Street (Rua Nova do Carvalho)", lat:38.7072892, lng:-9.1438142, cat:"nightlife",
+        desc:"Słynna „różowa ulica” w Cais do Sodré – kluby, bary, zdjęcia.",
+        links:[{label:"Przewodnik",url:"https://www.lisbonportugaltourism.com/pl/lizbona/atrakcje/pink-street.html"}],
+        why:"Kompaktowa strefa klubów – łatwo trzymać grupę razem." },
+      { city:"Lizbona", name:"Time Out Market (Mercado da Ribeira)", lat:38.70709, lng:-9.1459, cat:"nightlife",
+        desc:"Ogromna hala gastro: najlepsze stoiska i bary w mieście.",
+        links:[{label:"Strona",url:"https://www.timeoutmarket.com/lisboa/en/"}],
+        why:"Wygodne „karmienie” dużej ekipy – każdy coś znajdzie." },
+      { city:"Lizbona", name:"LX Factory", lat:38.703511, lng:-9.17882, cat:"nightlife",
+        desc:"Postindustrialny kompleks: bary, street-food, koncerty, galerie.",
+        links:[{label:"Strona",url:"https://lxfactory.com/en/"}],
+        why:"Klimat + dużo przestrzeni dla grupy." },
+      { city:"Lizbona", name:"Rejs/sunset na Tagu – Doca de Santo Amaro (Gate 3)", lat:38.69968, lng:-9.17605, cat:"adventure",
+        desc:"Miejsce zbiórki na rejsy pod mostem 25 de Abril.",
+        links:[{label:"Meeting point",url:"https://www.lisbonbyboat.com/meeting-point"}],
+        why:"Wspólna łódź = integracja + widoki." },
+      { city:"Lizbona", name:"Pilar 7 – 25 de Abril Bridge Experience", lat:38.699909, lng:-9.179541, cat:"adventure",
+        desc:"Szklana platforma na filarze mostu 25 de Abril – hardcore’owy widok.",
+        links:[{label:"Strona",url:"https://www.experienciapilar7.pt/en"}],
+        why:"Dreszczyk i świetne foty." },
+      { city:"Lizbona", name:"Torre de Belém", lat:38.691586, lng:-9.215977, cat:"culture",
+        desc:"Ikoniczna wieża u ujścia Tagu; symbol epoki odkryć.",
+        links:[{label:"Koordy",url:"https://www.latlong.net/place/the-belem-tower-lisbon-portugal-23126.html"}],
+        why:"Obowiązkowy „must-see” blisko innych atrakcji Belém." },
+      { city:"Lizbona", name:"Castelo de São Jorge", lat:38.713909, lng:-9.133476, cat:"culture",
+        desc:"Średniowieczny zamek z panoramą na Alfamę i Tag.",
+        links:[{label:"Koordy",url:"https://www.latlong.net/place/s-o-jorge-castle-lisbon-portugal-23127.html"}],
+        why:"Historia + widoki – dobry dzienny kontrast do nocy." },
+      { city:"Lizbona", name:"Miradouro da Senhora do Monte", lat:38.719186, lng:-9.132839, cat:"culture",
+        desc:"Jeden z najwyższych punktów widokowych na Lizbonę.",
+        links:[{label:"Koordy",url:"https://elevation.maplogs.com/poi/nossa_senhora_do_monte_belvedere_largo_monte_lisboa_portugal.321312.html"}],
+        why:"Szybka, bezpłatna „wow-miejscówka”." },
+      { city:"Lizbona", name:"Costa da Caparica – Praia do CDS (surf)", lat:38.645149, lng:-9.241793, cat:"adventure",
+        desc:"Szeroka plaża surfowa na południe od mostu; szkoły surfingu.",
+        links:[{label:"Blue Flag",url:"https://www.blueflag.global/awarded-sites/cds"}],
+        why:"Łatwy dojazd + fale dla różnych poziomów." },
+
+      /* ============== ALJEZUR ============== */
+      { city:"Aljezur", name:"Praia da Arrifana", lat:37.29206, lng:-8.86546, cat:"beach",
+        desc:"Słynna zatoka z klifami i „igłą” Pedra da Agulha; świetny surf.",
+        links:[{label:"Mapa",url:"https://mapcarta.com/16888602"}],
+        why:"Stabilny wybór na fale + dramatyczne klify." },
+      { city:"Aljezur", name:"Praia de Monte Clérigo", lat:37.3403611, lng:-8.8540361, cat:"beach",
+        desc:"Długa, dzika plaża z knajpkami; dobre warunki do surfingu.",
+        links:[{label:"Wiki",url:"https://en.wikipedia.org/wiki/Praia_de_Monte_Cl%C3%A9rigo"}],
+        why:"Mniej tłumów niż Arrifana; łatwo ogarnąć większą ekipę." },
+      { city:"Aljezur", name:"Praia da Amoreira (ujście rzeki)", lat:37.35139, lng:-8.84444, cat:"beach",
+        desc:"Plaża + laguna rzeki – pływanie, SUP, chill.",
+        links:[{label:"Wiki",url:"https://en.wikipedia.org/wiki/Praia_da_Amoreira"}],
+        why:"Świetna alternatywa przy wietrze/bałwanie." },
+      { city:"Aljezur", name:"Castelo de Aljezur", lat:37.316442, lng:-8.805352, cat:"culture",
+        desc:"Ruiny zamku na wzgórzu z panoramą doliny.",
+        links:[{label:"Info/koordy",url:"https://euroveloportugal.com/en/poi/castelo-de-aljezur-aljezur-castle"}],
+        why:"Krótki „hike” + historia." },
+      { city:"Aljezur", name:"Ribat da Arrifana / Ponta da Atalaia", lat:37.32098, lng:-8.87717, cat:"culture",
+        desc:"Ruiny średniowiecznego ribatu na cyplu; epickie klify i zachody.",
+        links:[{label:"Mapa",url:"https://mapcarta.com/N367674624"}],
+        why:"Krótki trekking, zero tłumów, widoki „koniec świata”." },
+      { city:"Aljezur", name:"Praia de Odeceixe", lat:37.440833, lng:-8.798333, cat:"beach",
+        desc:"Unikalna plaża u ujścia Rio de Seixe; rzeka + ocean w jednym.",
+        links:[{label:"Opis/zdjęcia",url:"https://www.beachrex.com/en/portugal/algarve/odeceixe-beaches/praia-de-odeceixe-mar"}],
+        why:"Plażowanie w rzece (cieplej) i w oceanie – idealne dla grupy." },
+      { city:"Aljezur", name:"Praia do Canal", lat:37.2702194, lng:-8.8601778, cat:"beach",
+        desc:"Dzika, kamienista zatoka tuż na południe od Arrifany.",
+        links:[{label:"Info",url:"https://euroveloportugal.com/en/poi/canal-beach"}],
+        why:"Ucieczka od tłumów; surowy klimat." },
+      { city:"Aljezur", name:"Praia da Bordeira (Carrapateira)", lat:37.1974167, lng:-8.9031417, cat:"beach",
+        desc:"Ogromna, 3-km plaża z wydmami i kładkami widokowymi.",
+        links:[{label:"Info",url:"https://euroveloportugal.com/en/poi/bordeira-beach"}],
+        why:"Mega przestrzeń na gry/zabawy; spoty na różnych poziomach." },
+      { city:"Aljezur", name:"Praia do Amado (surf)", lat:37.166935, lng:-8.902536, cat:"beach",
+        desc:"Kultowy spot surfowy; częste szkolenia i zawody.",
+        links:[{label:"Playocean",url:"https://www.playocean.net/en/portugal/aljezur/beaches/praia-do-amado-beach"}],
+        why:"Pewne fale + duże parkingi – łatwa logistyka dla busa i ekipy." },
+      { city:"Aljezur", name:"Rota Vicentina – Ponta da Atalaia (odcinek)", lat:37.321033, lng:-8.877207, cat:"adventure",
+        desc:"Fragment Fishermen’s Trail z klifami i widokiem na Atlantyk.",
+        links:[{label:"Trasa",url:"https://www.alltrails.com/trail/portugal/faro/rota-vicentina-trilho-da-ponta-da-atalaia-via-caminho-dos-pescadores"}],
+        why:"Szybki trekking „po emocje” między sesjami surfingu." },
+    ];
+
+    // === Grupy warstw: po mieście i kategorii ===
+    const groups = {}; // groups[city][cat] -> LayerGroup
+    const allBounds = [];
+
+    function ensureGroup(city, cat){
+      if(!groups[city]) groups[city] = {};
+      if(!groups[city][cat]) groups[city][cat] = L.layerGroup();
+      return groups[city][cat];
+    }
+
+    // Utwórz markery i wrzuć do grup
+    spots.forEach(s => {
+      const popupHtml = `
+        <div class="popup">
+          <h3>${s.name}
+            <span class="tag">${s.city}</span>
+            <span class="tag">${CAT_LABEL[s.cat] || s.cat}</span>
+          </h3>
+          <p>${s.desc}</p>
+          <p><strong>Dlaczego na mapie:</strong> ${s.why}</p>
+          <p class="src">${s.links.map(l => `• <a href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`).join("<br/>")}</p>
+          <p class="gps">GPS: ${s.lat.toFixed(6)}, ${s.lng.toFixed(6)}</p>
+        </div>`;
+      const m = L.marker([s.lat, s.lng]).bindPopup(popupHtml);
+      ensureGroup(s.city, s.cat).addLayer(m);
+      allBounds.push([s.lat, s.lng]);
+    });
+
+    // Domyślnie dodaj wszystkie grupy
+    Object.keys(groups).forEach(city=>{
+      Object.keys(groups[city]).forEach(cat=>{
+        groups[city][cat].addTo(map);
+      });
+    });
+
+    // Dopasuj do wszystkich
+    if(allBounds.length) map.fitBounds(allBounds, {padding:[24,24]});
+
+    // === Filtry ===
+    const cityChecks = [...document.querySelectorAll('#city-filters input[type="checkbox"]')];
+    const catChecks  = [...document.querySelectorAll('#cat-filters input[type="checkbox"]')];
+
+    function getSelected(set){
+      return set.filter(cb=>cb.checked).map(cb=> cb.dataset.city || cb.dataset.cat);
+    }
+
+    function refreshLayers(){
+      const onCities = new Set(getSelected(cityChecks));
+      const onCats   = new Set(getSelected(catChecks));
+      Object.entries(groups).forEach(([city, catsObj])=>{
+        Object.entries(catsObj).forEach(([cat, layer])=>{
+          const show = onCities.has(city) && onCats.has(cat);
+          if(show && !map.hasLayer(layer)) layer.addTo(map);
+          if(!show && map.hasLayer(layer)) map.removeLayer(layer);
+        });
+      });
+    }
+
+    cityChecks.forEach(cb => cb.addEventListener('change', refreshLayers));
+    catChecks.forEach(cb => cb.addEventListener('change', refreshLayers));
+
+    // Przyciski
+    document.getElementById('btn-all').addEventListener('click', ()=>{
+      [...cityChecks, ...catChecks].forEach(cb=> cb.checked = true);
+      refreshLayers(); fitVisible();
+    });
+    document.getElementById('btn-none').addEventListener('click', ()=>{
+      [...cityChecks, ...catChecks].forEach(cb=> cb.checked = false);
+      refreshLayers();
+    });
+    document.getElementById('btn-fit').addEventListener('click', fitVisible);
+
+    function fitVisible(){
+      const pts = [];
+      Object.entries(groups).forEach(([city, catsObj])=>{
+        Object.entries(catsObj).forEach(([cat, layer])=>{
+          if(map.hasLayer(layer)){
+            layer.getLayers().forEach(marker=>{
+              const ll = marker.getLatLng();
+              pts.push([ll.lat, ll.lng]);
+            });
+          }
+        });
+      });
+      if(pts.length) map.fitBounds(pts, {padding:[24,24]});
+    }
+  </script>
+</body>
+</html>
